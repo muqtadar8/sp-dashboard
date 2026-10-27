@@ -175,6 +175,36 @@
     .stat-icon { padding: 0.5rem; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; }
     .stat-icon svg { width: 20px; height: 20px; }
 
+    /* --- HABITS --- */
+    .habits-list { display: flex; flex-direction: column; gap: var(--s2, 1rem); }
+    .habit-card {
+      background: var(--bg, #121212);
+      border: 1px solid var(--divider-color, #333);
+      border-radius: var(--card-border-radius, 8px);
+      padding: var(--s2, 1rem);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .habit-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s2, 1rem); flex-wrap: wrap; }
+    .habit-name { font-weight: 600; font-size: 1rem; }
+    .habit-sub { color: var(--text-color-muted, #9e9e9e); font-size: 0.75rem; }
+    .habit-metrics { display: flex; align-items: center; gap: var(--s2, 1rem); flex-wrap: wrap; }
+    .habit-metric { text-align: right; }
+    .habit-metric-value { font-size: 1.125rem; font-weight: 700; display: block; }
+    .habit-metric-label { color: var(--text-color-muted, #9e9e9e); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .habit-trend-up { color: #4ade80; }
+    .habit-trend-down { color: #f87171; }
+    .habit-trend-flat { color: var(--text-color-muted, #9e9e9e); }
+    .habit-dot-grid { display: flex; gap: 3px; flex-wrap: wrap; }
+    .habit-dot { width: 10px; height: 10px; border-radius: 2px; background: var(--divider-color, #333); flex-shrink: 0; }
+    .habit-dot.is-done { background: var(--c-primary, #03a9f4); }
+    .habit-dot.is-disabled { opacity: 0.4; }
+    .habits-empty { color: var(--text-color-muted, #9e9e9e); text-align: center; padding: var(--s3, 1.5rem); }
+    .insight-card { display: flex; flex-direction: column; gap: 0.25rem; }
+    .insight-card .stat-value { font-size: 1.25rem; }
+    .insight-card .insight-name { font-weight: 600; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
     .progress-track { width: 100%; background: var(--divider-color, #333); border-radius: 9999px; height: 6px; margin-top: 1rem; overflow: hidden; }
     .progress-fill { background: #4ade80; height: 100%; transition: width 0.5s ease-out; }
 
@@ -504,6 +534,7 @@
         <button id="tab-btn-dashboard" class="tab-btn active" onclick="switchTab('dashboard')">Dashboard</button>
         <button id="tab-btn-details" class="tab-btn" onclick="switchTab('details')">Detailed List</button>
         <button id="tab-btn-drilldown" class="tab-btn" onclick="switchTab('drilldown')">By Project / Tag</button>
+        <button id="tab-btn-habits" class="tab-btn" onclick="switchTab('habits')">Habits</button>
 
         <!-- Settings. Deliberately not a 4th tab: the tab bar feeds Share / Print /
              Copy image, and settings must never end up inside an exported report. -->
@@ -759,6 +790,53 @@
 
       </div>
 
+      <!-- ========================================== -->
+      <!-- VIEW 4: HABITS                              -->
+      <!-- ========================================== -->
+      <div id="view-habits" class="view-content hidden">
+
+        <!-- Insight cards -->
+        <div class="grid-3">
+          <div class="stat-card insight-card">
+            <h3 class="stat-title">Consistency</h3>
+            <span class="stat-value" id="habit-stat-consistency">0%</span>
+            <span class="habit-sub">average completion, selected range</span>
+          </div>
+          <div class="stat-card insight-card">
+            <h3 class="stat-title">Best Habit</h3>
+            <span class="insight-name" id="habit-stat-best-name">—</span>
+            <span class="habit-sub" id="habit-stat-best-detail">No data yet</span>
+          </div>
+          <div class="stat-card insight-card">
+            <h3 class="stat-title">Needs Attention</h3>
+            <span class="insight-name" id="habit-stat-attention-name">—</span>
+            <span class="habit-sub" id="habit-stat-attention-detail">No data yet</span>
+          </div>
+          <div class="stat-card insight-card">
+            <h3 class="stat-title">Longest Active Streak</h3>
+            <span class="insight-name" id="habit-stat-streak-name">—</span>
+            <span class="habit-sub" id="habit-stat-streak-detail">No data yet</span>
+          </div>
+        </div>
+
+        <!-- Trend chart: habits completed per day, selected range -->
+        <div class="chart-card" style="margin-bottom:var(--s3,1.5rem);">
+          <div class="card-header">
+            <h3 class="card-title">Habits Completed Per Day</h3>
+          </div>
+          <div class="chart-container">
+            <div class="bar-chart" id="habits-bar-chart-container"></div>
+          </div>
+        </div>
+
+        <!-- Per-habit cards -->
+        <div class="habits-list" id="habits-list"></div>
+        <div class="habits-empty hidden" id="habits-empty">
+          No habits found. Add one in Super Productivity under Settings → Simple Counters, then reopen this tab.
+        </div>
+
+      </div>
+
     </div>
   </div>
 
@@ -896,7 +974,7 @@
                      sOpt('from-weekday', 'Starting from weekday')],
       tabMode: MODE_OPTIONS,
       tabPinned: [sOpt('dashboard', 'Dashboard'), sOpt('details', 'Detailed List'),
-                  sOpt('drilldown', 'By Project / Tag')],
+                  sOpt('drilldown', 'By Project / Tag'), sOpt('habits', 'Habits')],
       barMetricMode: MODE_OPTIONS,
       barMetricPinned: METRIC_OPTIONS,
       pieMetricMode: MODE_OPTIONS,
@@ -928,7 +1006,7 @@
     // than their `*Pinned` twin: Period can be left on a custom range.
     const SETTING_LAST_VALUES = {
       periodLast: ['today', 'this-week', 'week', 'month', 'year', 'custom', 'from-weekday'],
-      tabLast: ['dashboard', 'details', 'drilldown'],
+      tabLast: ['dashboard', 'details', 'drilldown', 'habits'],
       barMetricLast: ['time', 'completed', 'overdue', 'late'],
       pieMetricLast: ['time', 'completed', 'overdue', 'late'],
       pieDimLast: ['project', 'tag'],
@@ -1136,7 +1214,7 @@
     };
 
     // --- TAB LOGIC ---
-    const TAB_IDS = ['dashboard', 'details', 'drilldown'];
+    const TAB_IDS = ['dashboard', 'details', 'drilldown', 'habits'];
     const switchTab = (tabId) => {
       // Fall back rather than throw: switchTab runs during init from a stored
       // setting, and a null dereference here would abort the rest of the script
@@ -1155,7 +1233,9 @@
     let cachedTasks = [];
     let cachedProjects = [];
     let cachedTags = [];
+    let cachedSimpleCounters = [];
     let latestMetrics = null;
+    let latestHabitMetrics = null;
     let pieDimension = 'project';
     let currentSort = { key: getSetting('sortKey'), dir: getSetting('sortDir') }; // sorting state for details table
     let liveUpdateInterval = null;
@@ -1359,6 +1439,7 @@
       updateSortIndicators();
       populateDrillDropdown();
       renderDrillDown();
+      updateHabitsUI(processHabits(cachedSimpleCounters));
     };
 
     // Which time goal fits the period in view: a single day → the daily target,
@@ -1887,8 +1968,9 @@
     };
 
     // process tasks/projects into metrics and update UI
-    const processData = (tasksArr, projectsArr, tagsArr = []) => {
-      // determine date range from preset/selectors
+    // Shared by processData and processHabits so every tab agrees on what
+    // "the selected range" means — both read the same preset/custom controls.
+    const getSelectedDateRange = () => {
       const preset = document.getElementById('date-preset').value;
       let dateFromStr, dateToStr;
       if (preset === 'custom') {
@@ -1924,6 +2006,11 @@
         const trimmed = dateRange.filter(ds => working.has(new Date(ds + "T00:00:00").getDay()));
         if (trimmed.length) dateRange = trimmed;
       }
+      return { dateFromStr, dateToStr, dateRange };
+    };
+
+    const processData = (tasksArr, projectsArr, tagsArr = []) => {
+      const { dateFromStr, dateToStr, dateRange } = getSelectedDateRange();
       debugLog("[sp-dashboard] computed date range", dateFromStr, dateToStr, dateRange);
 
       // Build lookup maps for faster processing
@@ -2213,6 +2300,175 @@
       attachSortHandlers();
     };
 
+    // --- HABITS ---
+    // A "habit" is any Simple Counter the app exposes via getAppState(). The
+    // same countOnDay map backs both toggle-style and increment-style
+    // counters, so a day "counts" whenever its value is > 0, regardless of type.
+    const HABIT_LOOKBACK_DAYS = 90; // window used for best-streak, independent of the dashboard's selected range
+
+    const datesBack = (fromDateStr, n) => {
+      const out = [];
+      const d = new Date(fromDateStr + 'T00:00:00');
+      for (let i = 0; i < n; i++) {
+        out.push(toLocalDate(d));
+        d.setDate(d.getDate() - 1);
+      }
+      return out.reverse();
+    };
+
+    const computeHabitStreaks = (countOnDay, todayStr) => {
+      const isDone = (ds) => Number(countOnDay[ds] || 0) > 0;
+      const history = datesBack(todayStr, HABIT_LOOKBACK_DAYS);
+
+      // Current streak: today counts if already logged; otherwise today is
+      // simply "not yet done" and doesn't break a streak still in progress.
+      let currentStreak = 0;
+      let cursor = history.length - 1; // history[cursor] === todayStr by construction
+      if (!isDone(history[cursor])) cursor--;
+      while (cursor >= 0 && isDone(history[cursor])) { currentStreak++; cursor--; }
+
+      // Best streak within the lookback window.
+      let bestStreak = 0, run = 0;
+      history.forEach(ds => {
+        if (isDone(ds)) { run++; bestStreak = Math.max(bestStreak, run); }
+        else run = 0;
+      });
+
+      return { currentStreak, bestStreak };
+    };
+
+    // Completion rate (0-100) of `dateRange` against `countOnDay`.
+    const habitCompletionRate = (countOnDay, dateRange) => {
+      if (!dateRange.length) return 0;
+      const done = dateRange.filter(ds => Number(countOnDay[ds] || 0) > 0).length;
+      return (done / dateRange.length) * 100;
+    };
+
+    const processHabits = (simpleCounters) => {
+      const { dateRange } = getSelectedDateRange();
+      const todayStr = toLocalDate(new Date());
+      const enabled = (simpleCounters || []).filter(c => c && c.isEnabled !== false);
+
+      // The period immediately before the selected range, same length, so the
+      // trend arrow compares like with like instead of against all history.
+      const priorRange = dateRange.length
+        ? datesBack(dateRange[0], dateRange.length + 1).slice(0, -1)
+        : [];
+
+      const habits = enabled.map(c => {
+        const countOnDay = c.countOnDay || {};
+        const { currentStreak, bestStreak } = computeHabitStreaks(countOnDay, todayStr);
+        const rate = habitCompletionRate(countOnDay, dateRange);
+        const priorRate = priorRange.length ? habitCompletionRate(countOnDay, priorRange) : null;
+        const trendDelta = priorRate === null ? 0 : rate - priorRate;
+        return {
+          id: c.id,
+          title: c.title || c.id,
+          type: c.type || 'counter',
+          countOnDay,
+          currentStreak,
+          bestStreak,
+          completionRate: rate,
+          trendDelta,
+          daysDone: dateRange.filter(ds => Number(countOnDay[ds] || 0) > 0).length
+        };
+      });
+
+      // Cross-habit insights.
+      const dailyTotals = {
+        labels: dateRange,
+        data: dateRange.map(ds => habits.reduce((sum, h) => sum + (Number(h.countOnDay[ds] || 0) > 0 ? 1 : 0), 0))
+      };
+      const overallConsistency = habits.length
+        ? habits.reduce((sum, h) => sum + h.completionRate, 0) / habits.length
+        : 0;
+      const bestHabit = habits.length
+        ? habits.slice().sort((a, b) => b.completionRate - a.completionRate || b.currentStreak - a.currentStreak)[0]
+        : null;
+      // "Needs attention" is only meaningful for a habit with some history —
+      // a brand-new counter at 0% just hasn't had a chance yet.
+      const withHistory = habits.filter(h => Object.keys(h.countOnDay).length > 0);
+      const attentionHabit = withHistory.length
+        ? withHistory.slice().sort((a, b) => a.completionRate - b.completionRate || a.currentStreak - b.currentStreak)[0]
+        : null;
+      const streakHabit = habits.length
+        ? habits.slice().sort((a, b) => b.currentStreak - a.currentStreak)[0]
+        : null;
+
+      return { habits, dailyTotals, overallConsistency, bestHabit, attentionHabit, streakHabit };
+    };
+
+    const updateHabitsUI = (hm) => {
+      latestHabitMetrics = hm;
+      window.latestHabitMetrics = hm;
+
+      document.getElementById('habit-stat-consistency').textContent = `${Math.round(hm.overallConsistency)}%`;
+
+      const setInsight = (nameEl, detailEl, habit, detailFn) => {
+        if (!habit) {
+          document.getElementById(nameEl).textContent = '—';
+          document.getElementById(detailEl).textContent = 'No data yet';
+          return;
+        }
+        document.getElementById(nameEl).textContent = habit.title;
+        document.getElementById(detailEl).textContent = detailFn(habit);
+      };
+      setInsight('habit-stat-best-name', 'habit-stat-best-detail', hm.bestHabit,
+        h => `${Math.round(h.completionRate)}% in range`);
+      setInsight('habit-stat-attention-name', 'habit-stat-attention-detail', hm.attentionHabit,
+        h => `${Math.round(h.completionRate)}% in range, ${h.currentStreak}-day streak`);
+      setInsight('habit-stat-streak-name', 'habit-stat-streak-detail', hm.streakHabit,
+        h => h.currentStreak > 0 ? `${h.currentStreak} day${h.currentStreak === 1 ? '' : 's'} running` : 'No active streak');
+
+      renderGenericBarChart(hm.dailyTotals, 'habits-bar-chart-container', '#a78bfa',
+        (v) => `${Math.round(v)} habit${Math.round(v) === 1 ? '' : 's'}`, (v) => `${Math.round(v)}`, 1);
+
+      const list = document.getElementById('habits-list');
+      const empty = document.getElementById('habits-empty');
+      list.innerHTML = '';
+      empty.classList.toggle('hidden', hm.habits.length > 0);
+
+      const sorted = hm.habits.slice().sort((a, b) => b.currentStreak - a.currentStreak || b.completionRate - a.completionRate);
+      sorted.forEach(h => {
+        const trendClass = h.trendDelta > 0 ? 'habit-trend-up' : h.trendDelta < 0 ? 'habit-trend-down' : 'habit-trend-flat';
+        const trendArrow = h.trendDelta > 0 ? '▲' : h.trendDelta < 0 ? '▼' : '▬';
+        const dots = h.countOnDay && Object.keys(h.countOnDay).length
+          ? datesBack(toLocalDate(new Date()), 30).map(ds =>
+              `<div class="habit-dot ${Number(h.countOnDay[ds] || 0) > 0 ? 'is-done' : ''}" title="${escapeHtml(ds)}"></div>`).join('')
+          : '';
+        const card = document.createElement('div');
+        card.className = 'habit-card';
+        card.innerHTML = `
+          <div class="habit-card-top">
+            <div>
+              <div class="habit-name">${escapeHtml(h.title)}</div>
+              <div class="habit-sub">${h.daysDone} of ${hm.dailyTotals.labels.length} day(s) in range</div>
+            </div>
+            <div class="habit-metrics">
+              <div class="habit-metric">
+                <span class="habit-metric-value">${Math.round(h.completionRate)}%</span>
+                <span class="habit-metric-label">Completion</span>
+              </div>
+              <div class="habit-metric">
+                <span class="habit-metric-value">${h.currentStreak}</span>
+                <span class="habit-metric-label">Current streak</span>
+              </div>
+              <div class="habit-metric">
+                <span class="habit-metric-value">${h.bestStreak}</span>
+                <span class="habit-metric-label">Best streak</span>
+              </div>
+              <div class="habit-metric">
+                <span class="habit-metric-value ${trendClass}">${trendArrow} ${Math.abs(Math.round(h.trendDelta))}pt</span>
+                <span class="habit-metric-label">vs. prior period</span>
+              </div>
+            </div>
+          </div>
+          <div class="habit-dot-grid">${dots}</div>
+        `;
+        list.appendChild(card);
+      });
+    };
+
     // --- SHARE / EXPORT ---
     // Human-readable label for the range currently in view (derived from metrics, so it
     // reflects whatever preset/custom range produced the data on screen).
@@ -2229,7 +2485,8 @@
       const tabs = [
         { key: 'dashboard', label: 'Dashboard' },
         { key: 'details', label: 'Detailed List' },
-        { key: 'drilldown', label: 'By Project / Tag' }
+        { key: 'drilldown', label: 'By Project / Tag' },
+        { key: 'habits', label: 'Habits' }
       ];
       const active = tabs.find(t => !document.getElementById(`view-${t.key}`).classList.contains('hidden')) || tabs[0];
       return { ...active, node: document.getElementById(`view-${active.key}`) };
@@ -2443,7 +2700,13 @@
       const rows = [];
       const statusOf = (e) => e.late ? 'Late' : e.overdue ? 'Overdue' : e.isDone ? 'Done' : 'In Progress';
 
-      if (tabKey === 'details' || tabKey === 'drilldown') {
+      if (tabKey === 'habits') {
+        const hm = window.latestHabitMetrics || latestHabitMetrics;
+        rows.push(row(['Habit', 'Completion %', 'Current Streak', 'Best Streak', 'Trend (pt)']));
+        (hm ? hm.habits : []).forEach(h => rows.push(row([
+          h.title, Math.round(h.completionRate), h.currentStreak, h.bestStreak, Math.round(h.trendDelta)
+        ])));
+      } else if (tabKey === 'details' || tabKey === 'drilldown') {
         let entries = m.tableEntries;
         if (tabKey === 'details') {
           entries = sortEntries(entries, currentSort.key, currentSort.dir);
@@ -2485,7 +2748,22 @@
       const suffix = range ? ` (${range})` : '';
       const lines = [];
 
-      if (tabKey === 'details') {
+      if (tabKey === 'habits') {
+        const hm = window.latestHabitMetrics || latestHabitMetrics;
+        lines.push(`${b}Habit Trends${b}${suffix}`);
+        lines.push(`• Consistency: ${hm ? Math.round(hm.overallConsistency) : 0}%`);
+        if (hm && hm.bestHabit) lines.push(`• Best Habit: ${hm.bestHabit.title} (${Math.round(hm.bestHabit.completionRate)}%)`);
+        if (hm && hm.attentionHabit) lines.push(`• Needs Attention: ${hm.attentionHabit.title} (${Math.round(hm.attentionHabit.completionRate)}%)`);
+        if (hm && hm.streakHabit && hm.streakHabit.currentStreak > 0) {
+          lines.push(`• Longest Active Streak: ${hm.streakHabit.title} — ${hm.streakHabit.currentStreak} day(s)`);
+        }
+        if (hm && hm.habits.length) {
+          lines.push('');
+          lines.push('| Habit | Completion | Streak | Best |');
+          lines.push('| --- | --- | --- | --- |');
+          hm.habits.forEach(h => lines.push(`| ${h.title} | ${Math.round(h.completionRate)}% | ${h.currentStreak} | ${h.bestStreak} |`));
+        }
+      } else if (tabKey === 'details') {
         lines.push(`${b}Detailed Time Log${b}${suffix}`);
         lines.push('');
         lines.push('| Date | Project | Task | Time | Status |');
@@ -3201,6 +3479,12 @@
     window.captureNodeToPngBlob = captureNodeToPngBlob;
     window.triggerDownload = triggerDownload;
     window.renderNativePieChart = renderNativePieChart;
+    window.getSelectedDateRange = getSelectedDateRange;
+    window.datesBack = datesBack;
+    window.computeHabitStreaks = computeHabitStreaks;
+    window.habitCompletionRate = habitCompletionRate;
+    window.processHabits = processHabits;
+    window.updateHabitsUI = updateHabitsUI;
 
     // --- SP INTEGRATION / NATIVE IFRAME COMMS ---
     const pullDataFromSP = async () => {
@@ -3260,6 +3544,24 @@
             }
           }
           debugLog("[sp-dashboard] tags count", cachedTags.length);
+
+          // Simple Counters (habits). Older host versions may not expose
+          // getAppState, so a missing method just means an empty habits tab.
+          // Fetched before processData so updateDashboardUI's habits refresh
+          // (triggered as part of that call) sees fresh data, not last cycle's.
+          try {
+            if (typeof window.PluginAPI.getAppState === 'function') {
+              const appState = await window.PluginAPI.getAppState();
+              cachedSimpleCounters = Object.values((appState && appState.simpleCounters) || {});
+            } else {
+              cachedSimpleCounters = [];
+            }
+          } catch (scErr) {
+            debugWarn("[sp-dashboard] could not fetch simple counters:", scErr);
+            cachedSimpleCounters = [];
+          }
+          debugLog("[sp-dashboard] simple counters count", cachedSimpleCounters.length);
+
           processData(cachedTasks, cachedProjects, cachedTags);
         } else {
           console.warn("[sp-dashboard] PluginAPI missing inside pullDataFromSP");
@@ -3365,6 +3667,19 @@
             id: "t7", parentId: null, title: "Review Code", isDone: true, doneOn: new Date('2026-02-21T15:00Z').getTime(), projectId: "p1",
             tagIds: ["tag-fe"],
             timeSpentOnDay: { [dates[1]]: 3600000 /* 1h */ }, dueDay: "2026-02-19" // Late - completed 2 days after due date
+          }
+        ];
+
+        // Mock habits so the tab renders something in standalone/file:// dev.
+        const mockDay = (offset) => toLocalDate(new Date(Date.now() - offset * 86400000));
+        cachedSimpleCounters = [
+          {
+            id: 'h1', title: 'Morning Walk', type: 'toggle', isEnabled: true,
+            countOnDay: { [mockDay(0)]: 1, [mockDay(1)]: 1, [mockDay(2)]: 1, [mockDay(3)]: 0, [mockDay(4)]: 1 }
+          },
+          {
+            id: 'h2', title: 'Read 20 Pages', type: 'toggle', isEnabled: true,
+            countOnDay: { [mockDay(0)]: 0, [mockDay(1)]: 0, [mockDay(2)]: 1, [mockDay(3)]: 1, [mockDay(4)]: 1 }
           }
         ];
 
