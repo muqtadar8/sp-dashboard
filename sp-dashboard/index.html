@@ -191,19 +191,8 @@
     .habit-sub { color: var(--text-color-muted, #9e9e9e); font-size: 0.75rem; }
     .habit-metrics { display: flex; align-items: center; gap: var(--s2, 1rem); flex-wrap: wrap; }
     .habit-metric { text-align: right; }
-    .habit-metric-value { font-size: 1.125rem; font-weight: 700; display: block; }
-    .habit-metric-label { color: var(--text-color-muted, #9e9e9e); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    .habit-trend-up { color: #4ade80; }
-    .habit-trend-down { color: #f87171; }
-    .habit-trend-flat { color: var(--text-color-muted, #9e9e9e); }
-    .habit-dot-grid { display: flex; gap: 3px; flex-wrap: wrap; }
-    .habit-dot { width: 10px; height: 10px; border-radius: 2px; background: var(--divider-color, #333); flex-shrink: 0; }
-    .habit-dot.is-done { background: var(--c-primary, #03a9f4); }
-    .habit-dot.is-disabled { opacity: 0.4; }
+    .habit-metric b { font-size: 1.125rem; display: block; }
     .habits-empty { color: var(--text-color-muted, #9e9e9e); text-align: center; padding: var(--s3, 1.5rem); }
-    .insight-card { display: flex; flex-direction: column; gap: 0.25rem; }
-    .insight-card .stat-value { font-size: 1.25rem; }
-    .insight-card .insight-name { font-weight: 600; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .progress-track { width: 100%; background: var(--divider-color, #333); border-radius: 9999px; height: 6px; margin-top: 1rem; overflow: hidden; }
     .progress-fill { background: #4ade80; height: 100%; transition: width 0.5s ease-out; }
@@ -795,28 +784,10 @@
       <!-- ========================================== -->
       <div id="view-habits" class="view-content hidden">
 
-        <!-- Insight cards -->
-        <div class="grid-3">
-          <div class="stat-card insight-card">
-            <h3 class="stat-title">Consistency</h3>
-            <span class="stat-value" id="habit-stat-consistency">0%</span>
-            <span class="habit-sub">average completion, selected range</span>
-          </div>
-          <div class="stat-card insight-card">
-            <h3 class="stat-title">Best Habit</h3>
-            <span class="insight-name" id="habit-stat-best-name">—</span>
-            <span class="habit-sub" id="habit-stat-best-detail">No data yet</span>
-          </div>
-          <div class="stat-card insight-card">
-            <h3 class="stat-title">Needs Attention</h3>
-            <span class="insight-name" id="habit-stat-attention-name">—</span>
-            <span class="habit-sub" id="habit-stat-attention-detail">No data yet</span>
-          </div>
-          <div class="stat-card insight-card">
-            <h3 class="stat-title">Longest Active Streak</h3>
-            <span class="insight-name" id="habit-stat-streak-name">—</span>
-            <span class="habit-sub" id="habit-stat-streak-detail">No data yet</span>
-          </div>
+        <!-- Insights -->
+        <div class="stat-card" style="margin-bottom:var(--s3,1.5rem);">
+          <h3 class="stat-title">Habit Insights</h3>
+          <div class="habit-metrics" id="habit-insights" style="margin-top:0.75rem;"></div>
         </div>
 
         <!-- Trend chart: habits completed per day, selected range -->
@@ -832,7 +803,7 @@
         <!-- Per-habit cards -->
         <div class="habits-list" id="habits-list"></div>
         <div class="habits-empty hidden" id="habits-empty">
-          No habits found. Add one in Super Productivity under Settings → Simple Counters, then reopen this tab.
+          No habits found. Add one via Settings → Simple Counters.
         </div>
 
       </div>
@@ -2304,11 +2275,9 @@
     // A "habit" is any Simple Counter the app exposes via getAppState(). The
     // same countOnDay map backs both toggle-style and increment-style
     // counters, so a day "counts" whenever its value is > 0, regardless of type.
-    const HABIT_LOOKBACK_DAYS = 90; // window used for best-streak, independent of the dashboard's selected range
-
-    const datesBack = (fromDateStr, n) => {
+    const datesBack = (f, n) => {
       const out = [];
-      const d = new Date(fromDateStr + 'T00:00:00');
+      const d = new Date(f + 'T00:00:00');
       for (let i = 0; i < n; i++) {
         out.push(toLocalDate(d));
         d.setDate(d.getDate() - 1);
@@ -2316,9 +2285,9 @@
       return out.reverse();
     };
 
-    const computeHabitStreaks = (countOnDay, todayStr) => {
-      const isDone = (ds) => Number(countOnDay[ds] || 0) > 0;
-      const history = datesBack(todayStr, HABIT_LOOKBACK_DAYS);
+    const computeHabitStreaks = (cd, todayStr) => {
+      const isDone = (ds) => Number(cd[ds] || 0) > 0;
+      const history = datesBack(todayStr, 90); // best-streak lookback, independent of the selected range
 
       // Current streak: today counts if already logged; otherwise today is
       // simply "not yet done" and doesn't break a streak still in progress.
@@ -2337,11 +2306,10 @@
       return { currentStreak, bestStreak };
     };
 
-    // Completion rate (0-100) of `dateRange` against `countOnDay`.
-    const habitCompletionRate = (countOnDay, dateRange) => {
-      if (!dateRange.length) return 0;
-      const done = dateRange.filter(ds => Number(countOnDay[ds] || 0) > 0).length;
-      return (done / dateRange.length) * 100;
+    // Completion rate (0-100) of `range` against `cd` (a countOnDay map).
+    const habitCompletionRate = (cd, range) => {
+      if (!range.length) return 0;
+      return (range.filter(ds => Number(cd[ds] || 0) > 0).length / range.length) * 100;
     };
 
     const processHabits = (simpleCounters) => {
@@ -2349,27 +2317,15 @@
       const todayStr = toLocalDate(new Date());
       const enabled = (simpleCounters || []).filter(c => c && c.isEnabled !== false);
 
-      // The period immediately before the selected range, same length, so the
-      // trend arrow compares like with like instead of against all history.
-      const priorRange = dateRange.length
-        ? datesBack(dateRange[0], dateRange.length + 1).slice(0, -1)
-        : [];
-
       const habits = enabled.map(c => {
         const countOnDay = c.countOnDay || {};
         const { currentStreak, bestStreak } = computeHabitStreaks(countOnDay, todayStr);
-        const rate = habitCompletionRate(countOnDay, dateRange);
-        const priorRate = priorRange.length ? habitCompletionRate(countOnDay, priorRange) : null;
-        const trendDelta = priorRate === null ? 0 : rate - priorRate;
         return {
-          id: c.id,
           title: c.title || c.id,
-          type: c.type || 'counter',
           countOnDay,
           currentStreak,
           bestStreak,
-          completionRate: rate,
-          trendDelta,
+          completionRate: habitCompletionRate(countOnDay, dateRange),
           daysDone: dateRange.filter(ds => Number(countOnDay[ds] || 0) > 0).length
         };
       });
@@ -2385,40 +2341,26 @@
       const bestHabit = habits.length
         ? habits.slice().sort((a, b) => b.completionRate - a.completionRate || b.currentStreak - a.currentStreak)[0]
         : null;
-      // "Needs attention" is only meaningful for a habit with some history —
-      // a brand-new counter at 0% just hasn't had a chance yet.
-      const withHistory = habits.filter(h => Object.keys(h.countOnDay).length > 0);
-      const attentionHabit = withHistory.length
-        ? withHistory.slice().sort((a, b) => a.completionRate - b.completionRate || a.currentStreak - b.currentStreak)[0]
-        : null;
       const streakHabit = habits.length
         ? habits.slice().sort((a, b) => b.currentStreak - a.currentStreak)[0]
         : null;
 
-      return { habits, dailyTotals, overallConsistency, bestHabit, attentionHabit, streakHabit };
+      return { habits, dailyTotals, overallConsistency, bestHabit, streakHabit };
     };
+
+    const metric = (val, label, cls) => `<div class="habit-metric"><b class="${cls || ''}">${val}</b><span class="habit-sub">${label}</span></div>`;
 
     const updateHabitsUI = (hm) => {
       latestHabitMetrics = hm;
       window.latestHabitMetrics = hm;
 
-      document.getElementById('habit-stat-consistency').textContent = `${Math.round(hm.overallConsistency)}%`;
-
-      const setInsight = (nameEl, detailEl, habit, detailFn) => {
-        if (!habit) {
-          document.getElementById(nameEl).textContent = '—';
-          document.getElementById(detailEl).textContent = 'No data yet';
-          return;
-        }
-        document.getElementById(nameEl).textContent = habit.title;
-        document.getElementById(detailEl).textContent = detailFn(habit);
-      };
-      setInsight('habit-stat-best-name', 'habit-stat-best-detail', hm.bestHabit,
-        h => `${Math.round(h.completionRate)}% in range`);
-      setInsight('habit-stat-attention-name', 'habit-stat-attention-detail', hm.attentionHabit,
-        h => `${Math.round(h.completionRate)}% in range, ${h.currentStreak}-day streak`);
-      setInsight('habit-stat-streak-name', 'habit-stat-streak-detail', hm.streakHabit,
-        h => h.currentStreak > 0 ? `${h.currentStreak} day${h.currentStreak === 1 ? '' : 's'} running` : 'No active streak');
+      document.getElementById('habit-insights').innerHTML = [
+        metric(`${Math.round(hm.overallConsistency)}%`, 'Consistency'),
+        hm.bestHabit ? metric(escapeHtml(hm.bestHabit.title), `Best · ${Math.round(hm.bestHabit.completionRate)}%`) : metric('—', 'Best habit'),
+        hm.streakHabit && hm.streakHabit.currentStreak > 0
+          ? metric(hm.streakHabit.currentStreak, `${escapeHtml(hm.streakHabit.title)} streak`)
+          : metric('—', 'Longest streak')
+      ].join('');
 
       renderGenericBarChart(hm.dailyTotals, 'habits-bar-chart-container', '#a78bfa',
         (v) => `${Math.round(v)} habit${Math.round(v) === 1 ? '' : 's'}`, (v) => `${Math.round(v)}`, 1);
@@ -2430,40 +2372,21 @@
 
       const sorted = hm.habits.slice().sort((a, b) => b.currentStreak - a.currentStreak || b.completionRate - a.completionRate);
       sorted.forEach(h => {
-        const trendClass = h.trendDelta > 0 ? 'habit-trend-up' : h.trendDelta < 0 ? 'habit-trend-down' : 'habit-trend-flat';
-        const trendArrow = h.trendDelta > 0 ? '▲' : h.trendDelta < 0 ? '▼' : '▬';
-        const dots = h.countOnDay && Object.keys(h.countOnDay).length
-          ? datesBack(toLocalDate(new Date()), 30).map(ds =>
-              `<div class="habit-dot ${Number(h.countOnDay[ds] || 0) > 0 ? 'is-done' : ''}" title="${escapeHtml(ds)}"></div>`).join('')
-          : '';
+        const metrics = [
+          metric(`${Math.round(h.completionRate)}%`, 'Completion'),
+          metric(h.currentStreak, 'Streak'),
+          metric(h.bestStreak, 'Best')
+        ].join('');
         const card = document.createElement('div');
         card.className = 'habit-card';
         card.innerHTML = `
           <div class="habit-card-top">
             <div>
               <div class="habit-name">${escapeHtml(h.title)}</div>
-              <div class="habit-sub">${h.daysDone} of ${hm.dailyTotals.labels.length} day(s) in range</div>
+              <div class="habit-sub">${h.daysDone}/${hm.dailyTotals.labels.length} days in range</div>
             </div>
-            <div class="habit-metrics">
-              <div class="habit-metric">
-                <span class="habit-metric-value">${Math.round(h.completionRate)}%</span>
-                <span class="habit-metric-label">Completion</span>
-              </div>
-              <div class="habit-metric">
-                <span class="habit-metric-value">${h.currentStreak}</span>
-                <span class="habit-metric-label">Current streak</span>
-              </div>
-              <div class="habit-metric">
-                <span class="habit-metric-value">${h.bestStreak}</span>
-                <span class="habit-metric-label">Best streak</span>
-              </div>
-              <div class="habit-metric">
-                <span class="habit-metric-value ${trendClass}">${trendArrow} ${Math.abs(Math.round(h.trendDelta))}pt</span>
-                <span class="habit-metric-label">vs. prior period</span>
-              </div>
-            </div>
+            <div class="habit-metrics">${metrics}</div>
           </div>
-          <div class="habit-dot-grid">${dots}</div>
         `;
         list.appendChild(card);
       });
@@ -2700,13 +2623,7 @@
       const rows = [];
       const statusOf = (e) => e.late ? 'Late' : e.overdue ? 'Overdue' : e.isDone ? 'Done' : 'In Progress';
 
-      if (tabKey === 'habits') {
-        const hm = window.latestHabitMetrics || latestHabitMetrics;
-        rows.push(row(['Habit', 'Completion %', 'Current Streak', 'Best Streak', 'Trend (pt)']));
-        (hm ? hm.habits : []).forEach(h => rows.push(row([
-          h.title, Math.round(h.completionRate), h.currentStreak, h.bestStreak, Math.round(h.trendDelta)
-        ])));
-      } else if (tabKey === 'details' || tabKey === 'drilldown') {
+      if (tabKey === 'details' || tabKey === 'drilldown') {
         let entries = m.tableEntries;
         if (tabKey === 'details') {
           entries = sortEntries(entries, currentSort.key, currentSort.dir);
@@ -2748,22 +2665,7 @@
       const suffix = range ? ` (${range})` : '';
       const lines = [];
 
-      if (tabKey === 'habits') {
-        const hm = window.latestHabitMetrics || latestHabitMetrics;
-        lines.push(`${b}Habit Trends${b}${suffix}`);
-        lines.push(`• Consistency: ${hm ? Math.round(hm.overallConsistency) : 0}%`);
-        if (hm && hm.bestHabit) lines.push(`• Best Habit: ${hm.bestHabit.title} (${Math.round(hm.bestHabit.completionRate)}%)`);
-        if (hm && hm.attentionHabit) lines.push(`• Needs Attention: ${hm.attentionHabit.title} (${Math.round(hm.attentionHabit.completionRate)}%)`);
-        if (hm && hm.streakHabit && hm.streakHabit.currentStreak > 0) {
-          lines.push(`• Longest Active Streak: ${hm.streakHabit.title} — ${hm.streakHabit.currentStreak} day(s)`);
-        }
-        if (hm && hm.habits.length) {
-          lines.push('');
-          lines.push('| Habit | Completion | Streak | Best |');
-          lines.push('| --- | --- | --- | --- |');
-          hm.habits.forEach(h => lines.push(`| ${h.title} | ${Math.round(h.completionRate)}% | ${h.currentStreak} | ${h.bestStreak} |`));
-        }
-      } else if (tabKey === 'details') {
+      if (tabKey === 'details') {
         lines.push(`${b}Detailed Time Log${b}${suffix}`);
         lines.push('');
         lines.push('| Date | Project | Task | Time | Status |');
@@ -3479,12 +3381,6 @@
     window.captureNodeToPngBlob = captureNodeToPngBlob;
     window.triggerDownload = triggerDownload;
     window.renderNativePieChart = renderNativePieChart;
-    window.getSelectedDateRange = getSelectedDateRange;
-    window.datesBack = datesBack;
-    window.computeHabitStreaks = computeHabitStreaks;
-    window.habitCompletionRate = habitCompletionRate;
-    window.processHabits = processHabits;
-    window.updateHabitsUI = updateHabitsUI;
 
     // --- SP INTEGRATION / NATIVE IFRAME COMMS ---
     const pullDataFromSP = async () => {
@@ -3670,18 +3566,6 @@
           }
         ];
 
-        // Mock habits so the tab renders something in standalone/file:// dev.
-        const mockDay = (offset) => toLocalDate(new Date(Date.now() - offset * 86400000));
-        cachedSimpleCounters = [
-          {
-            id: 'h1', title: 'Morning Walk', type: 'toggle', isEnabled: true,
-            countOnDay: { [mockDay(0)]: 1, [mockDay(1)]: 1, [mockDay(2)]: 1, [mockDay(3)]: 0, [mockDay(4)]: 1 }
-          },
-          {
-            id: 'h2', title: 'Read 20 Pages', type: 'toggle', isEnabled: true,
-            countOnDay: { [mockDay(0)]: 0, [mockDay(1)]: 0, [mockDay(2)]: 1, [mockDay(3)]: 1, [mockDay(4)]: 1 }
-          }
-        ];
 
         processData(cachedTasks, cachedProjects, cachedTags);
       }
