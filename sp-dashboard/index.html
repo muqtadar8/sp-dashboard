@@ -793,7 +793,7 @@
         <!-- Trend chart: habits completed per day, selected range -->
         <div class="chart-card" style="margin-bottom:var(--s3,1.5rem);">
           <div class="card-header">
-            <h3 class="card-title">Habits Completed Per Day</h3>
+            <h3 class="card-title">Daily Completion Rate</h3>
           </div>
           <div class="chart-container">
             <div class="bar-chart" id="habits-bar-chart-container"></div>
@@ -2330,10 +2330,13 @@
         };
       });
 
-      // Cross-habit insights.
+      // Cross-habit insights. Daily rate, not raw count, so the chart stays
+      // meaningful regardless of how many habits exist.
       const dailyTotals = {
         labels: dateRange,
-        data: dateRange.map(ds => habits.reduce((sum, h) => sum + (Number(h.countOnDay[ds] || 0) > 0 ? 1 : 0), 0))
+        data: dateRange.map(ds => habits.length
+          ? (habits.reduce((sum, h) => sum + (Number(h.countOnDay[ds] || 0) > 0 ? 1 : 0), 0) / habits.length) * 100
+          : 0)
       };
       const overallConsistency = habits.length
         ? habits.reduce((sum, h) => sum + h.completionRate, 0) / habits.length
@@ -2363,7 +2366,7 @@
       ].join('');
 
       renderGenericBarChart(hm.dailyTotals, 'habits-bar-chart-container', '#a78bfa',
-        (v) => `${Math.round(v)} habit${Math.round(v) === 1 ? '' : 's'}`, (v) => `${Math.round(v)}`, 1);
+        (v) => `${Math.round(v)}% done`, (v) => `${Math.round(v)}%`, 25);
 
       const list = document.getElementById('habits-list');
       const empty = document.getElementById('habits-empty');
