@@ -2344,11 +2344,13 @@
       const bestHabit = habits.length
         ? habits.slice().sort((a, b) => b.completionRate - a.completionRate || b.currentStreak - a.currentStreak)[0]
         : null;
-      const streakHabit = habits.length
-        ? habits.slice().sort((a, b) => b.currentStreak - a.currentStreak)[0]
+      // Skip habits with no history at all - a brand-new one at 0% just hasn't had a chance yet.
+      const withHistory = habits.filter(h => Object.keys(h.countOnDay).length > 0);
+      const attentionHabit = withHistory.length
+        ? withHistory.slice().sort((a, b) => a.completionRate - b.completionRate || a.currentStreak - b.currentStreak)[0]
         : null;
 
-      return { habits, dailyTotals, overallConsistency, bestHabit, streakHabit };
+      return { habits, dailyTotals, overallConsistency, bestHabit, attentionHabit };
     };
 
     const metric = (val, label, cls) => `<div class="habit-metric"><b class="${cls || ''}">${val}</b><span class="habit-sub">${label}</span></div>`;
@@ -2359,10 +2361,10 @@
 
       document.getElementById('habit-insights').innerHTML = [
         metric(`${Math.round(hm.overallConsistency)}%`, 'Consistency'),
-        hm.bestHabit ? metric(escapeHtml(hm.bestHabit.title), `Best · ${Math.round(hm.bestHabit.completionRate)}%`) : metric('—', 'Best habit'),
-        hm.streakHabit && hm.streakHabit.currentStreak > 0
-          ? metric(hm.streakHabit.currentStreak, `${escapeHtml(hm.streakHabit.title)} streak`)
-          : metric('—', 'Longest streak')
+        hm.bestHabit ? metric(escapeHtml(hm.bestHabit.title), `Best · ${Math.round(hm.bestHabit.completionRate)}%`) : metric('—', 'Best'),
+        hm.attentionHabit
+          ? metric(escapeHtml(hm.attentionHabit.title), `Lowest · ${Math.round(hm.attentionHabit.completionRate)}%`)
+          : metric('—', 'Lowest')
       ].join('');
 
       renderGenericBarChart(hm.dailyTotals, 'habits-bar-chart-container', '#a78bfa',
@@ -2386,7 +2388,7 @@
           <div class="habit-card-top">
             <div>
               <div class="habit-name">${escapeHtml(h.title)}</div>
-              <div class="habit-sub">${h.daysDone}/${hm.dailyTotals.labels.length} days in range</div>
+              <div class="habit-sub">${h.daysDone}/${hm.dailyTotals.labels.length} days</div>
             </div>
             <div class="habit-metrics">${metrics}</div>
           </div>
